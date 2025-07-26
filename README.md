@@ -2,12 +2,43 @@
 
 This repository contains Terraform infrastructure code for the Macaozinho project, managing DEV and PROD environments across different AWS regions.
 
+## Quick Start
+
+1. **Setup Backend Infrastructure:**
+```bash
+# Get your AWS account ID
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+# Setup backend resources
+./scripts/setup-backend.sh $ACCOUNT_ID
+```
+
+2. **Update Account ID in configs:**
+```bash
+# Replace placeholder with your account ID in all backend configs
+find environments -name "main.tf" -exec sed -i '' "s/ACCOUNT_ID/$ACCOUNT_ID/g" {} \;
+```
+
+3. **Validate and Deploy:**
+```bash
+# Format and validate
+make fmt
+make validate
+
+# Deploy dev environment
+make apply-dev
+
+# Deploy prod environment (requires confirmation)
+make apply-prod
+```
+
 ## Prerequisites
 
 - AWS CLI v2.x or higher
 - Terraform v1.5.x or higher
 - Git
 - Docker (for container builds)
+- Make
 
 ## Initial AWS Account Setup
 
@@ -99,12 +130,22 @@ common_tags = {
 
 ## Backend Configuration
 
-Before running Terraform, create S3 buckets and DynamoDB tables for state management:
+Use the automated setup script to create S3 buckets and DynamoDB tables for state management:
 
 ```bash
 # Get your AWS account ID
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
+# Run the setup script
+./scripts/setup-backend.sh $ACCOUNT_ID
+
+# Update backend configurations with your account ID
+find environments -name "main.tf" -exec sed -i '' "s/ACCOUNT_ID/$ACCOUNT_ID/g" {} \;
+```
+
+Alternatively, create resources manually:
+
+```bash
 # Create S3 buckets for state storage
 aws s3 mb s3://${ACCOUNT_ID}-terraform-states-us-east-1 --region us-east-1
 aws s3 mb s3://${ACCOUNT_ID}-terraform-states-us-east-2 --region us-east-2
@@ -216,8 +257,31 @@ make fmt
 # Validate Terraform configuration
 make validate
 
-# Generate cost estimation
-make plan-cost
+# Plan environments
+make plan-dev
+make plan-prod
+
+# Apply environments (with confirmation)
+make apply-dev
+make apply-prod
+
+# Destroy environments (with confirmation)
+make destroy-dev
+make destroy-prod
+```
+
+### Using Scripts Directly
+
+```bash
+# Validate all configurations
+./scripts/validate.sh
+
+# Deploy specific component
+./scripts/deploy.sh dev vpc plan
+./scripts/deploy.sh dev app apply
+
+# Destroy entire environment
+./scripts/destroy.sh dev
 ```
 
 ### New Developer Onboarding
