@@ -93,7 +93,6 @@ common_tags = {
   Owner       = "UNDP"
   Environment = "prod"
   ManagedBy   = "terraform"
-  ManagedBy   = "terraform"
   CostCenter  = "macaozinho"
 }
 ```
@@ -126,6 +125,20 @@ aws dynamodb create-table \
   --region us-east-2
 ```
 
+## OIDC Provider Setup
+
+Before using GitHub Actions, create the OIDC provider in AWS:
+
+```bash
+# Create OIDC provider for GitHub Actions
+aws iam create-open-id-connect-provider \
+  --url https://token.actions.githubusercontent.com \
+  --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1 \
+  --client-id-list sts.amazonaws.com
+
+# Note the ARN returned - you'll need it for role trust policies
+```
+
 ## Deployment Instructions
 
 ### Deploy VPC Infrastructure
@@ -133,7 +146,14 @@ aws dynamodb create-table \
 1. **Initialize and Deploy DEV VPC:**
 ```bash
 cd environments/dev/vpc
-terraform init
+
+# Initialize with backend configuration
+terraform init \
+  -backend-config="bucket=${ACCOUNT_ID}-terraform-states-us-east-1" \
+  -backend-config="key=macaozinho/dev/vpc.tfstate" \
+  -backend-config="region=us-east-1" \
+  -backend-config="dynamodb_table=terraform-lock-${ACCOUNT_ID}-macaozinho-dev"
+
 terraform plan
 terraform apply
 ```
@@ -141,7 +161,14 @@ terraform apply
 2. **Initialize and Deploy PROD VPC:**
 ```bash
 cd environments/prod/vpc
-terraform init
+
+# Initialize with backend configuration
+terraform init \
+  -backend-config="bucket=${ACCOUNT_ID}-terraform-states-us-east-2" \
+  -backend-config="key=macaozinho/prod/vpc.tfstate" \
+  -backend-config="region=us-east-2" \
+  -backend-config="dynamodb_table=terraform-lock-${ACCOUNT_ID}-macaozinho-prod"
+
 terraform plan
 terraform apply
 ```
@@ -151,7 +178,14 @@ terraform apply
 1. **Deploy DEV Application:**
 ```bash
 cd environments/dev/app
-terraform init
+
+# Initialize with backend configuration
+terraform init \
+  -backend-config="bucket=${ACCOUNT_ID}-terraform-states-us-east-1" \
+  -backend-config="key=macaozinho/dev/project.tfstate" \
+  -backend-config="region=us-east-1" \
+  -backend-config="dynamodb_table=terraform-lock-${ACCOUNT_ID}-macaozinho-dev"
+
 terraform plan
 terraform apply
 ```
@@ -159,7 +193,14 @@ terraform apply
 2. **Deploy PROD Application:**
 ```bash
 cd environments/prod/app
-terraform init
+
+# Initialize with backend configuration
+terraform init \
+  -backend-config="bucket=${ACCOUNT_ID}-terraform-states-us-east-2" \
+  -backend-config="key=macaozinho/prod/project.tfstate" \
+  -backend-config="region=us-east-2" \
+  -backend-config="dynamodb_table=terraform-lock-${ACCOUNT_ID}-macaozinho-prod"
+
 terraform plan
 terraform apply
 ```
@@ -202,3 +243,102 @@ make plan-cost
 - Check AWS CloudFormation events for resource creation failures
 - Review Terraform logs with `TF_LOG=DEBUG`
 - Verify IAM permissions for your AWS user/role
+
+## GitHub Actions Workflow Example
+
+Create `.github/workflows/deploy.yml`:
+
+```yaml
+name: Deploy Infrastructure
+
+on:
+  push:
+    branches: [main]
+    paths: ['environments/**']
+  pull_request:
+    branches: [main]
+    paths: ['environments/**']
+
+env:
+  AWS_REGION_DEV: us-east-1
+  AWS_REGION_PROD: us-east-2
+
+jobs:
+  plan-dev:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ~1.5.0
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/macaozinho-dev-github-actions-terraform
+          aws-region: ${{ env.AWS_REGION_DEV }}
+      
+      - name: Terraform Plan DEV
+        working-directory: ./environments/dev/vpc
+        run: |
+          terraform init
+          terraform plan -no-color > plan.txt
+          # Add plan output to PR comment
+
+  deploy-dev:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ~1.5.0
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/macaozinho-dev-github-actions-terraform
+          aws-region: ${{ env.AWS_REGION_DEV }}
+      
+      - name: Deploy DEV Infrastructure
+        working-directory: ./environments/dev/vpc
+        run: |
+          terraform init
+          terraform apply -auto-approve
+```
+
+## Required IAM Permissions
+
+Your AWS user/role needs these permissions for initial setup:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:GetBucketVersioning",
+        "s3:PutBucketVersioning",
+        "s3:PutBucketEncryption",
+        "dynamodb:CreateTable",
+        "dynamodb:DescribeTable",
+        "iam:CreateRole",
+        "iam:CreateOpenIDConnectProvider",
+        "route53:CreateHostedZone",
+        "route53:ListHostedZones"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```

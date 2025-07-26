@@ -24,11 +24,21 @@ common_tags = {
 
 ### TERRAFORM
 
-- Add all info to readme.md to do the inital setup and configure aws in a brand new account
+- Add all info to readme.md to do the initial setup and configure aws in a brand new account
 
 - global configuration to include shared resources like Route53 hosted zones
     
-- Manage terraform state & lock with s3 and dynamoBD for each ENVIRONMENT
+- Manage terraform state & lock with s3 and DynamoDB for each ENVIRONMENT
+
+#### Terraform Versions
+- Required Terraform version: ~> 1.5.0
+- Required AWS Provider version: ~> 5.0
+
+#### Security Considerations
+- VPC will be created without security groups (containers will handle their own security)
+- OIDC authentication eliminates need for long-lived credentials
+- State files are encrypted at rest in S3
+- Separate Terraform states for VPC and application infrastructure
 
 ### VPC
 - module for VPC configuration since each environment
@@ -46,7 +56,7 @@ common_tags = {
   - {account-id}-terraform-states-{region}/{var.project}/{var.environment}/vpc.tfstate
   - {account-id}-terraform-states-{region}/{var.project}/{var.environment}/project.tfstate
 
-- DynamoDB Lock use one table for each environmet
+- DynamoDB Lock use one table for each environment
   - terraform-lock-{account-id}-{var.project}-{var.environment}
   
 ### ROLES
@@ -81,34 +91,30 @@ common_tags = {
 - OIDC provider ARN: arn:aws:iam::{account-id}:oidc-provider/token.actions.githubusercontent.com
 - Subject conditions: repo:undp-org/{repository-name}:*
 
-<!-- #### CI/CD Workflow Requirements
+#### CI/CD Workflow Requirements
 1. **Build Phase**
-   - Build Docker images for Lambda containers
+   - Build Docker images
    - Run tests and security scans
    - Tag images with:
-   -  Git SHA and 
-   -  environment
-   -  'latest'
+     - Git SHA
+     - environment
+     - 'latest'
 
 2. **Push Phase**
    - Authenticate to ECR using OIDC role
    - Push images to appropriate ECR repositories
-   - Update image tags -->
+   - Update image tags
 
-<!-- 3. **Deploy Phase**
-   - Update Lambda functions with new image URIs
-   - Deploy Terraform infrastructure changes
-   - Run smoke tests -->
+3. **Infrastructure Phase**
+   - Deploy Terraform infrastructure changes via GitHub Actions
+   - Run terraform plan for cost estimation
 
-### ECR
-- creat two ECR repositories
-- Repositories: 
-  
 ### ECR (Elastic Container Registry)
 #### Container Repositories
 - Repository names: 
-  - {var.project}-{var.environment}-stacks-monday
+  - {var.project}-{var.environment}-stacks-monday-webhook
   - {var.project}-{var.environment}-stacks-file_upload
+  
 
 <!-- - Enable image scanning on push for security -->
 - Set lifecycle policies to manage image retention
@@ -155,11 +161,10 @@ common_tags = {
 - golang
 - terraform
 - .env
-- worspace.md
+- workspace.md
 
 ### Folder structure below
-/vpc/
-/app/ for all other services
+Separate VPC and app configurations with different Terraform states
 ```
 environments/ 
 	dev/
