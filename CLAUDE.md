@@ -106,13 +106,23 @@ resource "aws_vpc" "main" {
 
 ### Module Structure
 ```
-modules/vpc/
+modules/{module-name}/
 ├── main.tf           # Resource definitions
 ├── variables.tf      # Input variables
 ├── outputs.tf        # Output values
 ├── README.md         # Module documentation
 └── examples/         # Usage examples
 ```
+
+### Current Modules
+- **vpc**: Virtual Private Cloud infrastructure
+- **ecr**: Elastic Container Registry for Docker images
+
+### Future Modules (Planned)
+- **lambda**: Serverless functions with container support
+- **dynamodb**: NoSQL database tables and indexes
+- **s3-vector**: S3 storage optimized for vector/AI workloads
+- **bedrock**: AWS Bedrock AI/ML services integration
 
 ### Module Best Practices
 - Make modules reusable across environments
@@ -248,11 +258,15 @@ terraform import aws_vpc.main vpc-12345678
 - **Regions**: us-east-1 (dev), us-east-2 (prod)
 - **CIDR blocks**: 10.0.0.0/24 (dev), 10.1.0.0/24 (prod)
 
-### ECR Repository Naming
-- Format: `{project}-{environment}-{service}`
-- Examples: 
+### Resource Naming Conventions
+- **Format**: `{project}-{environment}-{service}`
+- **ECR Examples**: 
   - `macaozinho-dev-monday-webhook`
   - `macaozinho-prod-file-upload`
+- **Future Resources**:
+  - Lambda: `macaozinho-{env}-function-{name}`
+  - DynamoDB: `macaozinho-{env}-table-{name}`
+  - S3: `macaozinho-{env}-{account-id}-{purpose}`
 
 ### Required Tags
 ```hcl
